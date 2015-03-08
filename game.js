@@ -410,6 +410,7 @@ function init() {
   setInterval(play, 1000 / 60);
 }
 
+
 /**************************
  * Resize window
  **************************/
