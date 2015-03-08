@@ -1,6 +1,7 @@
 /*jslint browser: true*/
 /*global $, jQuery*/
 
+
 /**************************
  * Global Vairiables
  **************************/
