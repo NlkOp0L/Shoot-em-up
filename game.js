@@ -8,7 +8,8 @@
 // Enemy Type enum
 var enmyType = {
     basic: 0,
-    homing: 1
+    homing: 1,
+    shooting: 2
 };
 
 // Weapon Type enum
@@ -56,12 +57,14 @@ function Player() {
     if (keys[90]) { this.y -= this.speed; }
     if (keys[81]) { this.x -= this.speed; }
     if (keys[68]) { this.x += this.speed; }
-    if (keys[32]) { this.weapon.fire(); }
+    if (keys[32]) { this.weapon.fire(this.x, this.y - 25); }
 
     if (this.x - 20 <= 0) { this.x = 20; }
     if (this.x + 20 >= canvas.width()) { this.x = canvas.width() - 20; }
     if (this.y - 20 <= 0) { this.y = 20; }
     if (this.y >= canvas.height()) { this.y = canvas.height(); }
+
+    this.weapon.delay -= 1;
   };
 
   this.render = function () {
@@ -87,12 +90,13 @@ function Player() {
 /**************************
  * Bullet Class
  **************************/
-function Bullet(speedX, speedY, color) {
-  this.x = player.x;
-  this.y = player.y - 25;
+function Bullet(x, y, speedX, speedY, color, isAlly) {
+  this.x = x;
+  this.y = y;
   this.speedX = speedX;
   this.speedY = speedY;
   this.color = color;
+  this.ally = isAlly;
 
   this.update = function () {
     this.x += this.speedX;
@@ -119,19 +123,38 @@ function Bullet(speedX, speedY, color) {
 function Weapon(type) {
   this.type = type;
   this.speed = 10;
+  this.delay =0;
 
-  this.fire = function () {
-    switch (this.type) {
-      case weaponType.basic:
-        bullets.push(new Bullet(0, -this.speed, "#00FF00"));
-        break;
-      case weaponType.spread:
-        bullets.push(new Bullet(-this.speed / 4, -this.speed, "#00FF00"));
-        bullets.push(new Bullet(0, -this.speed, "#00FF00"));
-        bullets.push(new Bullet(this.speed / 4, -this.speed, "#00FF00"));
-        break;
-      default:
-        break;
+  switch (this.type) {
+    case weaponType.basic:
+      this.delayFireRate = 10;
+      break;
+    case weaponType.spread:
+      this.delayFireRate = 50;
+      break;
+    default:
+      this.delayFireRate = 0;
+      break;
+  }
+
+  this.fire = function (x, y) {
+    if (this.delay <= 0) {
+      switch (this.type) {
+        case weaponType.basic:
+          bullets.push(new Bullet(x, y, 0, -this.speed, "#00FF00", true));
+          break;
+        case weaponType.spread:
+          bullets.push(new Bullet(x, y, -this.speed / 10, -this.speed, "#00FF00", true));
+          bullets.push(new Bullet(x, y, -this.speed / 5, -this.speed, "#00FF00", true));
+          bullets.push(new Bullet(x, y, 0, -this.speed, "#00FF00", true));
+          bullets.push(new Bullet(x, y, this.speed / 4, -this.speed, "#00FF00", true));
+          bullets.push(new Bullet(x, y, this.speed / 10, -this.speed, "#00FF00", true));
+          break;
+        default:
+          break;
+      }
+
+      this.delay = this.delayFireRate;
     }
   };
 }
@@ -171,6 +194,8 @@ function Enemy(type) {
   this.type = type;
   this.speedX = 0;
   this.speedY = 0;
+  this.delay = 0;
+  this.delayFireRate = 0;
 
   switch (this.type) {
     case enmyType.basic:
@@ -180,6 +205,10 @@ function Enemy(type) {
       break;
     case enmyType.homing:
       this.color = "#FF00FF";
+      break;
+    case enmyType.shooting:
+      this.color = "#00FFFF";
+      this.delayFireRate = 30;
       break;
     default:
       break;
@@ -204,6 +233,19 @@ function Enemy(type) {
         if (this.y + 10 >= canvas.height()) { this.y = canvas.height() - 10; }
 
         break;
+      case enmyType.shooting:
+        this.delay += 1;
+        if (this.delay >= this.delayFireRate) {
+          var dist = Math.sqrt(Math.pow((this.x - player.x), 2) +
+                               Math.pow((this.y - player.y), 2));
+          var speedX = (-1 / dist) * (this.x - player.x) * 10;
+          var speedY = (-1 / dist) * (this.y - player.y) * 10;
+
+          bullets.push(new Bullet(this.x, this.y, speedX, speedY, "#FF0000", false));
+
+          this.delay = 0;
+        }
+        break;
       default:
         break;
     }
@@ -218,6 +260,10 @@ function Enemy(type) {
     context.strokeStyle = "#000000";
     context.strokeRect(this.x - 10, this.y - 10, 20, 20);
   };
+
+  this.fire = function () {
+
+  };
 }
 
 
@@ -226,14 +272,14 @@ function Enemy(type) {
  **************************/
 function update() {
   // Update Player
-  if (player.hp >= 0) { player.update(); }
+  if (player.hp > 0) { player.update(); }
 
 
   var i, j;
   // Update bullets
   for (i = 0; i < bullets.length; i += 1) {
     bullets[i].update();
-    if (bullets[i].y < 10) { bullets.splice(i, 1); }
+    if (bullets[i].y < -10 || bullets[i].y > canvas.height() + 10 || bullets[i].x < -10 || bullets[i].x > canvas.width()) { bullets.splice(i, 1); }
   }
 
   // Update enemies
@@ -246,12 +292,12 @@ function update() {
     if (Math.sqrt(Math.pow((powerups[i].x - player.x), 2) + Math.pow((powerups[i].y - player.y), 2)) < 35) {
       switch (powerups[i].type) {
         case powerupType.spreadWeapon:
-          player.weapon.type = weaponType.spread;
+          player.weapon = new Weapon(weaponType.spread);
           powerups.splice(i, 1);
           powerups.push(new Powerup(powerupType.basicWeapon));
           break;
         case powerupType.basicWeapon:
-          player.weapon.type = weaponType.basic;
+          player.weapon = new Weapon(weaponType.basic);
           powerups.splice(i, 1);
           powerups.push(new Powerup(powerupType.spreadWeapon));
           break;
@@ -261,20 +307,29 @@ function update() {
     }
   }
 
+  for (i = 0; i < bullets.length; i += 1) {
+    if (bullets[i].ally  === false && Math.sqrt(Math.pow((bullets[i].x - player.x), 2) + Math.pow((bullets[i].y - player.y), 2)) < 15) {
+      bullets.splice(i, 1);
+      player.hp -= 10;
+    }
+  }
+
   for (j = 0; j < enemies.length; j += 1) {
     if (Math.sqrt(Math.pow((enemies[j].x - player.x), 2) + Math.pow((enemies[j].y - player.y), 2)) < 30) {
       if (enemies[j].type === enmyType.basic) { player.hp -= 10; }
       if (enemies[j].type === enmyType.homing) { player.hp -= 1; }
+      if (enemies[j].type === enmyType.sooting) { player.hp -= 10; }
 
       if (player.hp <= -1) { player.hp = -1; }
     }
 
     for (i = 0; i < bullets.length; i += 1) {
-      if (Math.sqrt(Math.pow((bullets[i].x - enemies[j].x), 2) + Math.pow((bullets[i].y - enemies[j].y), 2)) < 15) {
+      if (bullets[i].ally && Math.sqrt(Math.pow((bullets[i].x - enemies[j].x), 2) + Math.pow((bullets[i].y - enemies[j].y), 2)) < 15) {
         bullets.splice(i, 1);
 
-        if (enemies[j].type === enmyType.basic) { player.points += 10; }
-        if (enemies[j].type === enmyType.homing) { player.points += 50; }
+        if (enemies[j].type === enmyType.basic) { player.points += 50; }
+        if (enemies[j].type === enmyType.homing) { player.points += 25; }
+        if (enemies[j].type === enmyType.shooting) { player.points += 10; }
 
         enemies.push(new Enemy(enemies[j].type));
         enemies.splice(j, 1);
@@ -325,7 +380,7 @@ function render() {
   context.fillText("Score: " + player.points, 15, 75);
 
   // Death screen
-  if (player.hp < 0) {
+  if (player.hp <= 0) {
     // Overlay
     context.fillStyle = "rgba(0, 0, 0, 0.5)";
     context.fillRect(0, 0, canvas.width(), canvas.height());
@@ -397,7 +452,7 @@ function init() {
   // Initialise Game objects
   player = new Player();
   bullets = [];
-  enemies = [new Enemy(enmyType.basic), new Enemy(enmyType.basic), new Enemy(enmyType.basic), new Enemy(enmyType.basic), new Enemy(enmyType.homing), new Enemy(enmyType.homing)];
+  enemies = [new Enemy(enmyType.basic), new Enemy(enmyType.basic), new Enemy(enmyType.basic), new Enemy(enmyType.basic), new Enemy(enmyType.homing), new Enemy(enmyType.homing), new Enemy(enmyType.shooting), new Enemy(enmyType.shooting)];
   powerups = [new Powerup(powerupType.spreadWeapon)];
 
   // Initialise Time variables
