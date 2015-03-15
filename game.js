@@ -324,7 +324,7 @@ function update() {
     }
 
     for (i = 0; i < bullets.length; i += 1) {
-      if (bullets[i].ally && Math.sqrt(Math.pow((bullets[i].x - enemies[j].x), 2) + Math.pow((bullets[i].y - enemies[j].y), 2)) < 15) {
+      if (enemies[j] != undefined && bullets[i].ally && Math.sqrt(Math.pow((bullets[i].x - enemies[j].x), 2) + Math.pow((bullets[i].y - enemies[j].y), 2)) < 15) {
         bullets.splice(i, 1);
 
         if (enemies[j].type === enmyType.basic) { player.points += 50; }
